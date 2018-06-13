@@ -176,6 +176,24 @@ function validateAttendees(attendees) {
   });
 }
 
+function validateVars(event) {
+  if ('imageUrl' in event) {
+    if (!isString(event.imageUrl) || !validator.isURL(event.imageUrl)) {
+      throw new Error(
+        `Expected valid URL string, got ${JSON.stringify(event.imageUrl)}`
+      );
+    }
+  }
+
+  if ('isLocked' in event) {
+    if (!isString(event.isLocked) || !validator.isBoolean(event.isLocked)) {
+      throw new Error(
+        `Expected a Boolean value, got ${JSON.stringify(event.isLocked)}`
+      );
+    }
+  }
+}
+
 export async function createCommunityEvent(root, vars, ctx) {
   return new Promise(async function createCommunityEventPromise(
     resolve,
@@ -193,6 +211,7 @@ export async function createCommunityEvent(root, vars, ctx) {
     }
 
     const newEvent = {
+      ...vars,
       title: vars.title,
       description: vars.description,
       owner: user.id,
@@ -200,26 +219,10 @@ export async function createCommunityEvent(root, vars, ctx) {
       externalId: uuid()
     };
 
-    if ('imageUrl' in vars) {
-      if (!isString(vars.imageUrl) || !validator.isURL(vars.imageUrl)) {
-        reject(
-          `Expected valid URL string, got ${JSON.stringify(vars.imageUrl)}`
-        );
-        return null;
-      }
-
-      newEvent.imageUrl = vars.imageUrl;
-    }
-
-    if ('isLocked' in vars) {
-      if (!isString(vars.isLocked) || !validator.isBoolean(vars.isLocked)) {
-        reject(
-          `Expected a Boolean value, got ${JSON.stringify(vars.isLocked)}`
-        );
-        return null;
-      }
-
-      newEvent.isLocked = vars.isLocked;
+    try {
+      validateVars(newEvent);
+    } catch (err) {
+      return reject(err.message);
     }
 
     if ('attendees' in vars) {
@@ -308,4 +311,43 @@ export async function deleteCommunityEvent(root, vars, ctx) {
     }
     return event;
   });
+}
+
+export async function updateCommunityEvent(root, vars, ctx) {
+  const user = await validatedRequestor(ctx).catch(err => {
+    if (err) {
+      throw new Error(err);
+    }
+  });
+
+  const newEvent = {
+    ...vars,
+    owner: user.id,
+    externalId: uuid()
+  };
+  try {
+    validateVars(newEvent);
+  } catch (err) {
+    return reject(err.message);
+  }
+
+  if (!isString(vars.externalId) || !validator.isUUID(vars.externalId)) {
+    throw new TypeError('Not a valid UUID');
+  }
+
+  const event = await CommunityEventModel.findOne({
+    externalId: vars.externalId
+  });
+  if (isEmpty(event)) {
+    throw new Error('Event not found');
+  }
+  if (event.owner.externalId !== user.externalId) {
+    throw new Error('Only allowed to update events you own');
+  }
+
+  return await CommunityEventModel.update(
+    { externalId: vars.externalId },
+    { $set: newEvent },
+    { new: true }
+  );
 }

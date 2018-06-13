@@ -2,6 +2,7 @@ import {
   getCommunityEvent,
   getCommunityEvents,
   createCommunityEvent,
+  updateCommunityEvent,
   deleteCommunityEvent
 } from '../../dataLayer/mongo/communityEvent';
 
@@ -12,6 +13,7 @@ export const communityEventResolvers = {
   },
   Mutation: {
     createCommunityEvent,
+    updateCommunityEvent,
     deleteCommunityEvent
   }
 };
